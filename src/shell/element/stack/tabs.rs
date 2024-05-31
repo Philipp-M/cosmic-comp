@@ -23,7 +23,7 @@ use cosmic::{
 };
 use keyframe::{
     ease,
-    functions::{EaseInOutCubic, EaseOutCubic},
+    functions::{EaseInOut, EaseOut},
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -122,8 +122,8 @@ impl Offset {
     }
 }
 
-const SCROLL_ANIMATION_DURATION: Duration = Duration::from_millis(200);
-const TAB_ANIMATION_DURATION: Duration = Duration::from_millis(150);
+const SCROLL_ANIMATION_DURATION: Duration = Duration::from_millis(100);
+const TAB_ANIMATION_DURATION: Duration = Duration::from_millis(100);
 
 impl<'a, Message> Tabs<'a, Message>
 where
@@ -249,7 +249,7 @@ impl State {
                     .as_millis() as f32
                     / SCROLL_ANIMATION_DURATION.as_millis() as f32;
 
-                ease(EaseInOutCubic, 0.0, 1.0, percentage)
+                ease(EaseInOut, 0.0, 1.0, percentage)
             };
 
             Vector::new(
@@ -560,7 +560,7 @@ where
                         .duration_since(animation.start_time)
                         .as_millis() as f32
                         / TAB_ANIMATION_DURATION.as_millis() as f32;
-                    ease(EaseOutCubic, 0.0, 1.0, percentage)
+                    ease(EaseOut, 0.0, 1.0, percentage)
                 } else {
                     1.0
                 };
