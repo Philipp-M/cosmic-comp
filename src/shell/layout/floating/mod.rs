@@ -7,7 +7,7 @@ use std::{
 };
 
 use cosmic_settings_config::shortcuts::action::ResizeDirection;
-use keyframe::{ease, functions::EaseInOutCubic};
+use keyframe::{ease, functions::EaseOut};
 use smithay::{
     backend::renderer::{
         element::{
@@ -47,8 +47,8 @@ use crate::{
 mod grabs;
 pub use self::grabs::*;
 
-pub const ANIMATION_DURATION: Duration = Duration::from_millis(200);
-pub const MINIMIZE_ANIMATION_DURATION: Duration = Duration::from_millis(320);
+pub const ANIMATION_DURATION: Duration = Duration::from_millis(100);
+pub const MINIMIZE_ANIMATION_DURATION: Duration = Duration::from_millis(220);
 
 #[derive(Debug, Default)]
 pub struct FloatingLayout {
@@ -155,7 +155,7 @@ impl Animation {
             now.duration_since(start).min(duration).as_secs_f64() / duration.as_secs_f64();
 
         ease(
-            EaseInOutCubic,
+            EaseOut,
             EaseRectangle(previous_rect),
             EaseRectangle(target_rect),
             progress,

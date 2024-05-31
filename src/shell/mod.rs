@@ -18,7 +18,7 @@ use cosmic_comp_config::{
 use cosmic_protocols::workspace::v1::server::zcosmic_workspace_handle_v1::TilingState;
 use cosmic_settings_config::shortcuts::action::{Direction, FocusDirection, ResizeDirection};
 use cosmic_settings_config::{shortcuts, window_rules::ApplicationException};
-use keyframe::{ease, functions::EaseInOutCubic};
+use keyframe::{ease, functions::EaseInOut};
 use smithay::{
     backend::{input::TouchSlot, renderer::element::RenderElementStates},
     desktop::{
@@ -103,7 +103,7 @@ use self::{
     },
 };
 
-const ANIMATION_DURATION: Duration = Duration::from_millis(200);
+const ANIMATION_DURATION: Duration = Duration::from_millis(100);
 const GESTURE_MAX_LENGTH: f64 = 150.0;
 const GESTURE_POSITION_THRESHOLD: f64 = 0.5;
 const GESTURE_VELOCITY_THRESHOLD: f64 = 0.02;
@@ -131,14 +131,14 @@ impl OverviewMode {
             OverviewMode::Started(_, start) => {
                 let percentage = Instant::now().duration_since(*start).as_millis() as f32
                     / ANIMATION_DURATION.as_millis() as f32;
-                Some(ease(EaseInOutCubic, 0.0, 1.0, percentage))
+                Some(ease(EaseInOut, 0.0, 1.0, percentage))
             }
             OverviewMode::Active(_) => Some(1.0),
             OverviewMode::Ended(_, end) => {
                 let percentage = Instant::now().duration_since(*end).as_millis() as f32
                     / ANIMATION_DURATION.as_millis() as f32;
                 if percentage < 1.0 {
-                    Some(ease(EaseInOutCubic, 1.0, 0.0, percentage))
+                    Some(ease(EaseInOut, 1.0, 0.0, percentage))
                 } else {
                     None
                 }
@@ -180,14 +180,14 @@ impl ResizeMode {
             ResizeMode::Started(_, start, _) => {
                 let percentage = Instant::now().duration_since(*start).as_millis() as f32
                     / ANIMATION_DURATION.as_millis() as f32;
-                Some(ease(EaseInOutCubic, 0.0, 1.0, percentage))
+                Some(ease(EaseInOut, 0.0, 1.0, percentage))
             }
             ResizeMode::Active(_, _) => Some(1.0),
             ResizeMode::Ended(end, _) => {
                 let percentage = Instant::now().duration_since(*end).as_millis() as f32
                     / ANIMATION_DURATION.as_millis() as f32;
                 if percentage < 1.0 {
-                    Some(ease(EaseInOutCubic, 1.0, 0.0, percentage))
+                    Some(ease(EaseInOut, 1.0, 0.0, percentage))
                 } else {
                     None
                 }
