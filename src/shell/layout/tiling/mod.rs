@@ -40,10 +40,7 @@ use crate::{
 
 use cosmic_settings_config::shortcuts::action::{FocusDirection, ResizeDirection};
 use id_tree::{InsertBehavior, MoveBehavior, Node, NodeId, NodeIdError, RemoveBehavior, Tree};
-use keyframe::{
-    ease,
-    functions::{EaseInOutCubic, Linear},
-};
+use keyframe::{ease, functions::EaseOut};
 use smithay::{
     backend::renderer::{
         element::{
@@ -76,9 +73,9 @@ mod grabs;
 pub use self::blocker::*;
 pub use self::grabs::*;
 
-pub const ANIMATION_DURATION: Duration = Duration::from_millis(200);
-pub const MINIMIZE_ANIMATION_DURATION: Duration = Duration::from_millis(320);
-pub const MOUSE_ANIMATION_DELAY: Duration = Duration::from_millis(150);
+pub const ANIMATION_DURATION: Duration = Duration::from_millis(100);
+pub const MINIMIZE_ANIMATION_DURATION: Duration = Duration::from_millis(220);
+pub const MOUSE_ANIMATION_DELAY: Duration = Duration::from_millis(100);
 pub const INITIAL_MOUSE_ANIMATION_DELAY: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3995,7 +3992,7 @@ impl TilingLayout {
                 let percentage = since / total;
                 debug_assert!(!percentage.is_nan());
                 debug_assert!(!percentage.is_infinite());
-                ease(EaseInOutCubic, 0.0, 1.0, percentage)
+                ease(EaseOut, 0.0, 1.0, percentage)
             }
         } else {
             1.0
@@ -4146,7 +4143,7 @@ impl TilingLayout {
         let percentage = if let Some(animation_start) = self.queue.animation_start {
             let percentage = Instant::now().duration_since(animation_start).as_millis() as f32
                 / duration.as_millis() as f32;
-            ease(EaseInOutCubic, 0.0, 1.0, percentage)
+            ease(EaseOut, 0.0, 1.0, percentage)
         } else {
             1.0
         };
@@ -4666,7 +4663,7 @@ where
                             }),
                         );
                         geo = ease(
-                            Linear,
+                            EaseOut,
                             EaseRectangle(geo),
                             EaseRectangle(swap_geo),
                             transition,
@@ -4868,7 +4865,7 @@ where
                             }),
                         );
                         geo = ease(
-                            Linear,
+                            EaseOut,
                             EaseRectangle(geo),
                             EaseRectangle(swap_geo),
                             transition,
@@ -5079,7 +5076,7 @@ fn render_old_tree(
                 if let Some(minimize_geo) = minimize_geo {
                     scaled_geo = Some(
                         ease(
-                            EaseInOutCubic,
+                            EaseOut,
                             EaseRectangle(*original_geo),
                             EaseRectangle(*minimize_geo),
                             percentage,
@@ -5270,7 +5267,7 @@ where
     {
         let window_geo = window.geometry();
         let swap_geo = ease(
-            Linear,
+            EaseOut,
             EaseRectangle({
                 let mut geo = focused_geo.clone();
                 geo.loc.x += STACK_TAB_HEIGHT;
@@ -5313,7 +5310,7 @@ where
                         .as_logical()
                         .to_physical_precise_round(output_scale),
                     ease(
-                        Linear,
+                        EaseOut,
                         1.0,
                         swap_factor(window_geo.size),
                         transition.unwrap_or(1.0),
@@ -5702,7 +5699,7 @@ fn render_new_tree(
                 (
                     if was_minimized {
                         ease(
-                            EaseInOutCubic,
+                            EaseOut,
                             EaseRectangle(old_geo),
                             EaseRectangle(new_geo),
                             percentage,
@@ -5710,7 +5707,7 @@ fn render_new_tree(
                         .unwrap()
                     } else {
                         ease(
-                            Linear,
+                            EaseOut,
                             EaseRectangle(old_geo),
                             EaseRectangle(new_geo),
                             percentage,

@@ -26,7 +26,7 @@ use cosmic::theme::CosmicTheme;
 use cosmic_protocols::workspace::v2::server::zcosmic_workspace_handle_v2::TilingState;
 use id_tree::Tree;
 use indexmap::IndexSet;
-use keyframe::{ease, functions::EaseInOutCubic};
+use keyframe::{ease, functions::EaseOut};
 use smithay::output::WeakOutput;
 use smithay::{
     backend::renderer::{
@@ -68,7 +68,7 @@ use super::{
     CosmicMappedRenderElement, CosmicSurface, ResizeDirection, ResizeMode,
 };
 
-const FULLSCREEN_ANIMATION_DURATION: Duration = Duration::from_millis(200);
+const FULLSCREEN_ANIMATION_DURATION: Duration = Duration::from_millis(100);
 
 // For stable workspace id, generate random 24-bit integer, as a hex string
 // Must be compared with existing workspaces work uniqueness.
@@ -1514,13 +1514,13 @@ impl Workspace {
                         / FULLSCREEN_ANIMATION_DURATION.as_secs_f64();
                     (
                         ease(
-                            EaseInOutCubic,
+                            EaseOut,
                             EaseRectangle(*previous_geo),
                             EaseRectangle(fullscreen_geo),
                             duration,
                         )
                         .0,
-                        ease(EaseInOutCubic, 0.0, 1.0, duration),
+                        ease(EaseOut, 0.0, 1.0, duration),
                     )
                 }
                 (_, Some(ended)) => {
@@ -1528,13 +1528,13 @@ impl Workspace {
                         / FULLSCREEN_ANIMATION_DURATION.as_secs_f64();
                     (
                         ease(
-                            EaseInOutCubic,
+                            EaseOut,
                             EaseRectangle(fullscreen_geo),
                             EaseRectangle(*previous_geo),
                             duration,
                         )
                         .0,
-                        ease(EaseInOutCubic, 1.0, 0.0, duration),
+                        ease(EaseOut, 1.0, 0.0, duration),
                     )
                 }
                 (None, None) => (fullscreen_geo, 1.0),
@@ -1704,13 +1704,13 @@ impl Workspace {
                         / FULLSCREEN_ANIMATION_DURATION.as_secs_f64();
                     (
                         ease(
-                            EaseInOutCubic,
+                            EaseOut,
                             EaseRectangle(*previous_geo),
                             EaseRectangle(fullscreen_geo),
                             duration,
                         )
                         .0,
-                        ease(EaseInOutCubic, 0.0, 1.0, duration),
+                        ease(EaseOut, 0.0, 1.0, duration),
                     )
                 }
                 (_, Some(ended)) => {
@@ -1718,13 +1718,13 @@ impl Workspace {
                         / FULLSCREEN_ANIMATION_DURATION.as_secs_f64();
                     (
                         ease(
-                            EaseInOutCubic,
+                            EaseOut,
                             EaseRectangle(fullscreen_geo),
                             EaseRectangle(*previous_geo),
                             duration,
                         )
                         .0,
-                        ease(EaseInOutCubic, 1.0, 0.0, duration),
+                        ease(EaseOut, 1.0, 0.0, duration),
                     )
                 }
                 (None, None) => (fullscreen_geo, 1.0),
