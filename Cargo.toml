@@ -84,6 +84,8 @@ features = [
   "wayland_frontend",
   "xwayland",
 ]
+git = "https://github.com/Philipp-M/smithay.git"
+rev = "04cc095a2f9dc992f627fce5d90a5388bbe5b88f"
 version = "0.4"
 
 [dependencies.smithay-egui]
@@ -114,5 +116,5 @@ inherits = "release"
 [profile.release]
 lto = "fat"
 
-[patch.crates-io]
-smithay = { git = "https://github.com/smithay/smithay.git", rev = "f93476c" }
+[patch."https://github.com/Smithay/smithay.git"]
+smithay = { git = "https://github.com/Philipp-M/smithay.git", rev = "04cc095a2f9dc992f627fce5d90a5388bbe5b88f" }
