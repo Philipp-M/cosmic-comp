@@ -230,11 +230,26 @@ impl From<&CosmicSurface> for ActivationKey {
 }
 
 #[derive(Debug)]
+pub struct PendingWindow {
+    pub surface: CosmicSurface,
+    pub seat: Seat<State>,
+    pub fullscreen: Option<Output>,
+    pub maximized: bool,
+}
+
+#[derive(Debug)]
+pub struct PendingLayer {
+    pub surface: LayerSurface,
+    pub seat: Seat<State>,
+    pub output: Output,
+}
+
+#[derive(Debug)]
 pub struct Shell {
     pub workspaces: Workspaces,
 
-    pub pending_windows: Vec<(CosmicSurface, Seat<State>, Option<Output>)>,
-    pub pending_layers: Vec<(LayerSurface, Output, Seat<State>)>,
+    pub pending_windows: Vec<PendingWindow>,
+    pub pending_layers: Vec<PendingLayer>,
     pub pending_activations: HashMap<ActivationKey, ActivationContext>,
     pub override_redirect_windows: Vec<X11Surface>,
     pub session_lock: Option<SessionLock>,
@@ -553,34 +568,43 @@ impl WorkspaceSet {
 
     fn ensure_last_empty(&mut self, state: &mut WorkspaceUpdateGuard<State>) {
         // add empty at the end, if necessary
-        if self
-            .workspaces
-            .last()
-            .map(|last| !last.is_empty())
-            .unwrap_or(true)
-        {
+        if self.workspaces.last().map_or(true, |last| !last.is_empty()) {
             self.add_empty_workspace(state);
         }
 
-        // remove empty workspaces in between, if they are not active
+        // remove other empty workspaces
         let len = self.workspaces.len();
-        let mut keep = vec![true; len];
-        for (i, workspace) in self.workspaces.iter().enumerate() {
-            if workspace.is_empty() && i != self.active && i != len - 1 {
-                state.remove_workspace(workspace.handle);
-                keep[i] = false;
-            }
-        }
+        let kept: Vec<bool> = self
+            .workspaces
+            .iter()
+            .enumerate()
+            .map(|(i, workspace)| {
+                let previous_is_empty =
+                    i > 0 && self.workspaces.get(i - 1).map_or(false, |w| w.is_empty());
+                let keep = if workspace.is_empty() {
+                    // Keep empty workspace if it's active, or it's the last workspace,
+                    // and the previous worspace is not both active and empty.
+                    i == self.active
+                        || (i == len - 1 && !(i == self.active + 1 && previous_is_empty))
+                } else {
+                    true
+                };
+                if !keep {
+                    state.remove_workspace(workspace.handle);
+                }
+                keep
+            })
+            .collect();
 
-        let mut iter = keep.iter();
+        let mut iter = kept.iter();
         self.workspaces.retain(|_| *iter.next().unwrap());
-        self.active -= keep
+        self.active -= kept
             .iter()
             .take(self.active + 1)
-            .filter(|keep| !**keep)
+            .filter(|kept| !**kept)
             .count();
 
-        if keep.iter().any(|val| *val == false) {
+        if kept.iter().any(|val| *val == false) {
             for (i, workspace) in self.workspaces.iter().enumerate() {
                 workspace_set_idx(state, i as u8 + 1, self.idx, &workspace.handle);
             }
@@ -1603,14 +1627,14 @@ impl Shell {
             })
             // pending layer map surface?
             .or_else(|| {
-                self.pending_layers.iter().find_map(|(l, output, _)| {
+                self.pending_layers.iter().find_map(|pending| {
                     let mut found = false;
-                    l.with_surfaces(|s, _| {
+                    pending.surface.with_surfaces(|s, _| {
                         if s == surface {
                             found = true;
                         }
                     });
-                    found.then_some(output)
+                    found.then_some(&pending.output)
                 })
             })
             // override redirect window?
@@ -1966,8 +1990,10 @@ impl Shell {
             .iter()
             .for_each(|or| or.refresh());
 
-        self.pending_layers.retain(|(s, _, _)| s.alive());
-        self.pending_windows.retain(|(s, _, _)| s.alive());
+        self.pending_layers
+            .retain(|pending| pending.surface.alive());
+        self.pending_windows
+            .retain(|pending| pending.surface.alive());
     }
 
     pub fn update_pointer_position(&mut self, location: Point<f64, Local>, output: &Output) {
@@ -2058,9 +2084,14 @@ impl Shell {
         let pos = self
             .pending_windows
             .iter()
-            .position(|(w, _, _)| w == window)
+            .position(|pending| &pending.surface == window)
             .unwrap();
-        let (window, seat, output) = self.pending_windows.remove(pos);
+        let PendingWindow {
+            surface: window,
+            seat,
+            fullscreen: output,
+            maximized: should_be_maximized,
+        } = self.pending_windows.remove(pos);
 
         let parent_is_sticky = if let Some(toplevel) = window.0.toplevel() {
             if let Some(parent) = toplevel.parent() {
@@ -2146,7 +2177,7 @@ impl Shell {
 
         let maybe_focused = workspace.focus_stack.get(&seat).iter().next().cloned();
         if let Some(focused) = maybe_focused {
-            if (focused.is_stack() && !is_dialog && !should_be_fullscreen)
+            if (focused.is_stack() && !is_dialog && !should_be_fullscreen && !should_be_maximized)
                 && !(workspace.is_tiled(&focused) && floating_exception)
             {
                 focused.stack_ref().unwrap().add_window(window, None);
@@ -2196,6 +2227,10 @@ impl Shell {
             self.toggle_sticky(&seat, &mapped);
         }
 
+        if !should_be_fullscreen && should_be_maximized {
+            self.maximize_request(&mapped, &seat, false);
+        }
+
         let new_target = if (workspace_output == seat.active_output()
             && active_handle == workspace_handle)
             || parent_is_sticky
@@ -2237,12 +2272,12 @@ impl Shell {
         let pos = self
             .pending_layers
             .iter()
-            .position(|(l, _, _)| l == layer_surface)
+            .position(|pending| &pending.surface == layer_surface)
             .unwrap();
-        let (layer_surface, output, _seat) = self.pending_layers.remove(pos);
+        let pending = self.pending_layers.remove(pos);
 
         let wants_focus = {
-            with_states(layer_surface.wl_surface(), |states| {
+            with_states(pending.surface.wl_surface(), |states| {
                 let mut state = states.cached_state.get::<LayerSurfaceCachedState>();
                 matches!(state.current().layer, Layer::Top | Layer::Overlay)
                     && state.current().keyboard_interactivity != KeyboardInteractivity::None
@@ -2250,14 +2285,14 @@ impl Shell {
         };
 
         {
-            let mut map = layer_map_for_output(&output);
-            map.map_layer(&layer_surface).unwrap();
+            let mut map = layer_map_for_output(&pending.output);
+            map.map_layer(&pending.surface).unwrap();
         }
         for workspace in self.workspaces.spaces_mut() {
             workspace.tiling_layer.recalculate();
         }
 
-        wants_focus.then(|| layer_surface.into())
+        wants_focus.then(|| pending.surface.into())
     }
 
     pub fn unmap_surface<S>(
@@ -2274,9 +2309,9 @@ impl Shell {
                     .position(|(s, _)| &s == surface)
                     .map(|idx| (idx, m.clone()))
             });
-            let surface = if let Some((idx, mut mapped)) = sticky_res {
+            let surface = if let Some((idx, mapped)) = sticky_res {
                 if mapped.is_stack() {
-                    mapped.stack_ref_mut().unwrap().remove_idx(idx)
+                    mapped.stack_ref().unwrap().remove_idx(idx)
                 } else {
                     set.sticky_layer.unmap(&mapped);
                     Some(mapped.active_window())
@@ -2289,19 +2324,19 @@ impl Shell {
             {
                 if set.minimized_windows.get(idx).unwrap().window.is_stack() {
                     let window = &mut set.minimized_windows.get_mut(idx).unwrap().window;
-                    let stack = window.stack_ref_mut().unwrap();
+                    let stack = window.stack_ref().unwrap();
                     let idx = stack.surfaces().position(|s| &s == surface);
                     idx.and_then(|idx| stack.remove_idx(idx))
                 } else {
                     Some(set.minimized_windows.remove(idx).window.active_window())
                 }
-            } else if let Some((workspace, mut elem)) = set.workspaces.iter_mut().find_map(|w| {
+            } else if let Some((workspace, elem)) = set.workspaces.iter_mut().find_map(|w| {
                 w.element_for_surface(&surface)
                     .cloned()
                     .map(|elem| (w, elem))
             }) {
                 if elem.is_stack() {
-                    let stack = elem.stack_ref_mut().unwrap();
+                    let stack = elem.stack_ref().unwrap();
                     let idx = stack.surfaces().position(|s| &s == surface);
                     idx.and_then(|idx| stack.remove_idx(idx))
                 } else {
@@ -2314,7 +2349,12 @@ impl Shell {
 
             if let Some(surface) = surface {
                 toplevel_info.remove_toplevel(&surface);
-                self.pending_windows.push((surface, seat.clone(), None));
+                self.pending_windows.push(PendingWindow {
+                    surface,
+                    seat: seat.clone(),
+                    fullscreen: None,
+                    maximized: false,
+                });
                 return;
             }
         }
@@ -2676,7 +2716,7 @@ impl Shell {
         let serial = serial.into();
 
         let mut start_data = check_grab_preconditions(&seat, surface, serial, client_initiated)?;
-        let mut old_mapped = self.element_for_surface(surface).cloned()?;
+        let old_mapped = self.element_for_surface(surface).cloned()?;
         if old_mapped.is_minimized() {
             return None;
         }
@@ -2840,7 +2880,7 @@ impl Shell {
         toplevel_leave_output(&window, &cursor_output);
 
         if move_out_of_stack {
-            old_mapped.stack_ref_mut().unwrap().remove_window(&window);
+            old_mapped.stack_ref().unwrap().remove_window(&window);
             self.workspaces
                 .space_for_handle_mut(&workspace_handle)
                 .unwrap()
@@ -3208,7 +3248,7 @@ impl Shell {
             if window.is_fullscreen(true) {
                 return;
             }
-            self.maximize_request(window, seat);
+            self.maximize_request(window, seat, true);
         }
     }
 
@@ -3279,7 +3319,7 @@ impl Shell {
         }
     }
 
-    pub fn maximize_request(&mut self, mapped: &CosmicMapped, seat: &Seat<State>) {
+    pub fn maximize_request(&mut self, mapped: &CosmicMapped, seat: &Seat<State>, animate: bool) {
         self.unminimize_request(mapped, seat);
         let (original_layer, floating_layer, original_geometry) = if let Some(set) = self
             .workspaces
@@ -3308,7 +3348,7 @@ impl Shell {
                 original_layer,
             });
             std::mem::drop(state);
-            floating_layer.map_maximized(mapped.clone(), original_geometry, true);
+            floating_layer.map_maximized(mapped.clone(), original_geometry, animate);
         }
     }
 
@@ -3537,7 +3577,7 @@ impl Shell {
 
             if was_maximized {
                 if let Some(KeyboardFocusTarget::Element(mapped)) = res.as_ref() {
-                    self.maximize_request(mapped, seat);
+                    self.maximize_request(mapped, seat, false);
                 }
             }
 

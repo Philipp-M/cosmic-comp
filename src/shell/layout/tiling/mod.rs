@@ -1662,11 +1662,11 @@ impl TilingLayout {
                         .unwrap();
 
                     let stack_data = tree.get_mut(&next_child_id).unwrap().data_mut();
-                    let mut mapped = match stack_data {
+                    let mapped = match stack_data {
                         Data::Mapped { mapped, .. } => mapped.clone(),
                         _ => unreachable!(),
                     };
-                    let stack = mapped.stack_ref_mut().unwrap();
+                    let stack = mapped.stack_ref().unwrap();
 
                     let surface = match node.data() {
                         Data::Mapped { mapped, .. } => mapped.active_window(),
@@ -2741,7 +2741,7 @@ impl TilingLayout {
                 match tree.get_mut(window_id).unwrap().data_mut() {
                     Data::Mapped { mapped, .. } => {
                         mapped.convert_to_stack((&self.output, mapped.bbox()), self.theme.clone());
-                        let Some(stack) = mapped.stack_ref_mut() else {
+                        let Some(stack) = mapped.stack_ref() else {
                             unreachable!()
                         };
                         for surface in window.windows().map(|s| s.0) {
@@ -5269,14 +5269,16 @@ where
         )
         .unwrap();
 
-        indicators.push(IndicatorShader::focus_element(
-            renderer,
-            Key::Static(swapping_stack_surface_id.clone()),
-            swap_geo,
-            4,
-            output_scale,
-            transition.unwrap_or(1.0),
-            [window_hint.red, window_hint.green, window_hint.blue],
+        swap_elements.push(CosmicMappedRenderElement::FocusIndicator(
+            IndicatorShader::focus_element(
+                renderer,
+                Key::Static(swapping_stack_surface_id.clone()),
+                swap_geo,
+                4,
+                output_scale,
+                transition.unwrap_or(1.0),
+                [window_hint.red, window_hint.green, window_hint.blue],
+            ),
         ));
 
         let render_loc =
@@ -5318,7 +5320,7 @@ where
         percentage,
         swap_tree,
         swap_desc.as_ref(),
-        |node_id, data, geo, original_geo, alpha, animating| {
+        |node_id, data, geo, _original_geo, alpha, animating| {
             if swap_desc.as_ref().map(|desc| &desc.node) == Some(&node_id)
                 || focused.as_ref() == Some(&node_id)
             {
@@ -5479,14 +5481,14 @@ where
                     })
                     .unwrap_or(false)
                 {
-                    let mut geo = mapped.active_window_geometry().as_local();
-                    geo.loc += original_geo.loc;
+                    let mut active_geo = mapped.active_window_geometry().as_local();
+                    active_geo.loc += geo.loc - mapped.geometry().loc.as_local();
                     elements.insert(
                         0,
                         CosmicMappedRenderElement::Overlay(BackdropShader::element(
                             renderer,
                             Key::Window(Usage::Overlay, mapped.key()),
-                            geo,
+                            active_geo,
                             0.0,
                             0.3,
                             group_color,

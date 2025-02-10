@@ -33,6 +33,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap},
     fs::OpenOptions,
+    io::Write,
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc, RwLock},
 };
@@ -228,7 +229,7 @@ impl Config {
 
         // Source key bindings from com.system76.CosmicSettings.Shortcuts
         let settings_context = shortcuts::context().expect("Failed to load shortcuts config");
-        let system_actions = shortcuts::system_actions(&config);
+        let system_actions = shortcuts::system_actions(&settings_context);
         let mut shortcuts = shortcuts::shortcuts(&settings_context);
 
         // Add any missing default shortcuts recommended by the compositor.
@@ -600,7 +601,15 @@ impl<'a, T: Serialize> std::ops::DerefMut for PersistenceGuard<'a, T> {
 impl<'a, T: Serialize> Drop for PersistenceGuard<'a, T> {
     fn drop(&mut self) {
         if let Some(path) = self.0.as_ref() {
-            let writer = match OpenOptions::new()
+            let content = match ron::ser::to_string_pretty(&self.1, Default::default()) {
+                Ok(content) => content,
+                Err(err) => {
+                    warn!("Failed to serialize: {:?}", err);
+                    return;
+                }
+            };
+
+            let mut writer = match OpenOptions::new()
                 .create(true)
                 .truncate(true)
                 .write(true)
@@ -612,8 +621,11 @@ impl<'a, T: Serialize> Drop for PersistenceGuard<'a, T> {
                     return;
                 }
             };
-            if let Err(err) = ron::ser::to_writer_pretty(writer, &self.1, Default::default()) {
+
+            if let Err(err) = writer.write_all(content.as_bytes()) {
                 warn!(?err, "Failed to persist {}", path.display());
+            } else {
+                let _ = writer.flush();
             }
         }
     }
